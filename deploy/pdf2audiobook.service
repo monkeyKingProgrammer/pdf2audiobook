@@ -1,0 +1,21 @@
+[Unit]
+Description=Sonora PDF to Audiobook API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/pdf2audiobook
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+Environment=PORT=8791
+ExecStart=/usr/bin/node server/index.js
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
