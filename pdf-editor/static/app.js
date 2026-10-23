@@ -1,5 +1,6 @@
 const $ = id => document.getElementById(id);
 let doc = null, page = 0, revision = 0, tool = 'select', geometry = null, selection = null, dragging = null, zoom = 100;
+let sourceFile = null, appliedEdits = [], recovery = null;
 const descriptions = {
   select: ['Make it yours.', 'Click a text block to inspect it, or choose a tool above to get started.'],
   replace: ['Refine the words.', 'Click existing text to replace it. You can also draw a larger box for longer text.'],
@@ -8,12 +9,44 @@ const descriptions = {
   'delete-image': ['Keep it simple.', 'Click an image to remove its visible pixels on this page. Text overlapping the image is preserved.']
 };
 async function api(path, options = {}) {
-  const response = await fetch('/api/' + path, options);
+  let response = await fetch('/api/' + path, options);
+  if (response.status === 404 && sourceFile && path.startsWith('documents/')) {
+    const detail = await response.clone().json().catch(() => ({}));
+    if (detail.detail === 'Document expired. Please reopen your PDF.') {
+      const expiredId = path.split('/')[1];
+      await recoverDocument(expiredId);
+      path = path.replace(`documents/${expiredId}`, `documents/${doc.id}`);
+      response = await fetch('/api/' + path, options);
+    }
+  }
   if (!response.ok) { let error; try { error = (await response.json()).detail; } catch { error = 'The request could not be completed.'; } throw new Error(typeof error === 'string' ? error : 'Please check your selection and settings.'); }
   return response.json();
 }
-function message(text) { $('notice').textContent = text; $('notice').hidden = false; setTimeout(() => $('notice').hidden = true, 8000); }
-async function busy(task) { $('busy').hidden = false; try { await task(); } catch (error) { message(error.message); } finally { $('busy').hidden = true; } }
+async function recoverDocument(expiredId) {
+  if (doc.id !== expiredId) return;
+  if (!recovery) {
+    recovery = (async () => {
+      const data = new FormData(); data.append('file', sourceFile);
+      const response = await fetch('/api/documents', {method:'POST', body:data});
+      if (!response.ok) throw new Error('Could not restore this session. Your edits have not been applied. Try again or reopen the PDF.');
+      const restored = await response.json();
+      for (const operation of appliedEdits) {
+        const replay = await fetch(`/api/documents/${restored.id}/edit`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(operation)});
+        if (!replay.ok) throw new Error('Could not restore previous edits. Reopen the PDF before continuing.');
+        Object.assign(restored, await replay.json());
+      }
+      doc = restored; revision++;
+    })().finally(() => { recovery = null; });
+  }
+  await recovery;
+}
+let noticeTimer;
+function message(text, error = false) {
+  clearTimeout(noticeTimer); $('notice').textContent = text; $('notice').hidden = false;
+  $('notice').setAttribute('role', error ? 'alert' : 'status');
+  if (!error) noticeTimer = setTimeout(() => $('notice').hidden = true, 8000);
+}
+async function busy(task) { $('notice').hidden = true; $('busy').hidden = false; try { await task(); } catch (error) { message(error.message, true); } finally { $('busy').hidden = true; } }
 function url(number, thumb = false) { return `/api/documents/${doc.id}/pages/${number}/image?thumb=${thumb}&v=${revision}`; }
 function thumbnails() {
   $('thumbnails').replaceChildren();
@@ -80,7 +113,7 @@ async function openFile(file) {
     const data = new FormData(); data.append('file', file);
     const next = await api('documents', {method:'POST',body:data});
     if (doc) fetch(`/api/documents/${doc.id}`, {method:'DELETE'});
-    doc = next; page = 0; revision = 0;
+    doc = next; sourceFile = file; appliedEdits = []; page = 0; revision = 0;
     $('filename').textContent = doc.name; $('welcome').hidden = true; $('workspace').hidden = false; $('save').disabled = false;
     thumbnails(); await loadPage(0); setTool('select');
   });
@@ -88,7 +121,9 @@ async function openFile(file) {
 }
 async function mutate(operation) {
   await busy(async () => {
-    const result = await api(`documents/${doc.id}/edit`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({page, ...operation})});
+    const edit = {page, ...operation};
+    const result = await api(`documents/${doc.id}/edit`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(edit)});
+    appliedEdits.push(edit);
     doc = {...doc,...result}; revision++; thumbnails(); await loadPage(page);
     message(operation.action === 'redact' ? 'Content permanently removed from the working copy. Save a copy to download.' : 'Change applied. You can undo it before leaving.');
   });
@@ -115,11 +150,20 @@ $('cancel-selection').onclick = () => setSelection(null);
 $('apply').onclick = () => selection && mutate({action:tool==='select'?'replace':tool,rect:selection,text:$('edit-text').value,size:Number($('font-size').value),color:$('text-color').value,fill:$('fill').value});
 $('delete-page').onclick = () => { if (confirm(`Delete page ${page+1} from your working copy?`)) mutate({action:'delete-page'}); };
 $('rotate').onclick = () => mutate({action:'rotate'});
-$('undo').onclick = () => busy(async () => { doc={...doc,...await api(`documents/${doc.id}/undo`,{method:'POST'})}; revision++; thumbnails(); await loadPage(page); });
+$('undo').onclick = () => busy(async () => { doc={...doc,...await api(`documents/${doc.id}/undo`,{method:'POST'})}; appliedEdits.pop(); revision++; thumbnails(); await loadPage(page); });
 $('previous').onclick = () => busy(() => loadPage(page-1)); $('next').onclick = () => busy(() => loadPage(page+1));
 function setZoom(value) {zoom=Math.max(50,Math.min(200,value));$('zoom-label').textContent=zoom+'%';$('surface').style.maxWidth=780*zoom/100+'px';$('surface').style.width=zoom>100?780*zoom/100+'px':'100%';}
 $('zoom-in').onclick = () => setZoom(zoom+25); $('zoom-out').onclick = () => setZoom(zoom-25);
 $('save').onclick = () => busy(async () => {
+  await api(`documents/${doc.id}`);
   const response=await fetch(`/api/documents/${doc.id}/download`); if(!response.ok)throw new Error('Could not save the PDF. Your session may have expired.');
   const url=URL.createObjectURL(await response.blob()); const link=document.createElement('a');link.href=url;link.download=doc.name.replace(/\.pdf$/i,'')+'-edited.pdf';link.click();setTimeout(()=>URL.revokeObjectURL(url),5000);
 });
+setInterval(async () => {
+  if (!doc || !sourceFile || $('busy').hidden === false) return;
+  const previousId = doc.id;
+  try {
+    await api(`documents/${doc.id}`);
+    if (doc.id !== previousId) { thumbnails(); if (!selection) await loadPage(page); }
+  } catch (error) { message(error.message, true); }
+}, 5 * 60 * 1000);

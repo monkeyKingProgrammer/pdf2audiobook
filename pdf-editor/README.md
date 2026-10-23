@@ -28,6 +28,8 @@ PDFs are sent to the editor server over HTTPS and held in process memory. Sessio
 
 Maximum file size: 40 MB. Maximum page count: 1000. Password-protected PDFs must first be unlocked. Documents with digital signatures will need to be signed again after editing.
 
+While the editor tab is open, it keeps the session active every five minutes. If the server session expires or restarts, the browser can restore the original upload and replay successful edits before retrying the requested change. Recovery requires the same open tab; refreshes discard the in-memory upload and edit history. Failed edits remain visible as an error until the next action.
+
 PyMuPDF is licensed under AGPL-3.0 or a commercial license. Review its licensing requirements when distributing or operating modified versions.
 
 Folio's source in this directory is provided under AGPL-3.0-or-later. See LICENSE. The parent Sonora application is a separate project.
