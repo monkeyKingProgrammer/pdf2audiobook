@@ -5,3 +5,5 @@ dist/
 .DS_Store
 .playwright-cli/
 output/
+pdf-editor/.venv/
+pdf-editor/__pycache__/

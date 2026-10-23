@@ -1,0 +1,19 @@
+[Unit]
+Description=Folio PDF Editor
+After=network-online.target
+
+[Service]
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/pdfeditor
+ExecStart=/opt/pdfeditor/.venv/bin/python -m uvicorn app:app --host 127.0.0.1 --port 8792 --limit-concurrency 25
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+MemoryMax=700M
+
+[Install]
+WantedBy=multi-user.target
