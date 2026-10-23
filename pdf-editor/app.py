@@ -152,9 +152,11 @@ def edit(token: str, operation: Edit):
                 if operation.action != 'add-text':
                     page.add_redact_annot(rect, fill=rgb(operation.fill), cross_out=False)
                     page.apply_redactions(images=2, graphics=2 if operation.action == 'redact' else 0, text=0 if operation.action != 'delete-image' else 1)
-                if operation.action in ['replace', 'add-text']:
-                    if not operation.text.strip():
-                        raise HTTPException(400, 'Enter the text to insert.')
+                if operation.action == 'add-text' and not operation.text.strip():
+                    raise HTTPException(400, 'Enter the text to insert.')
+                # An empty replacement means remove the selected content only.
+                # Redaction above has already removed the original PDF text.
+                if operation.action in ['replace', 'add-text'] and operation.text.strip():
                     if any(ord(char) > 255 for char in operation.text):
                         raise HTTPException(400, 'Text insertion currently supports Latin characters. Use plain quotation marks and hyphens.')
                     font = fitz.Font('helv')

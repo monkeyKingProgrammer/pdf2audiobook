@@ -22,6 +22,8 @@ On Linux use `.venv/bin/python`. Open http://localhost:8792.
 
 Open a PDF. Select **Edit text** and click a text run, or draw a larger area for replacement. Choose **Add text** and draw a box to insert text. Choose **Redact**, draw an area, choose white or black fill, and apply. Choose **Images**, click an image, and apply to remove its pixels. Page tools rotate or delete the current page. **Save a copy** downloads a rewritten PDF; the original file is unchanged.
 
+To delete selected text using **Edit text**, clear the text field (or enter only spaces) and select **Apply change**. An empty replacement permanently removes the selected text without inserting new characters.
+
 Redaction applies actual PDF content removal through PyMuPDF and rewrites the file with garbage collection. Covered image pixels are removed, including those on scanned pages. Image removal preserves overlapping text. Text replacement currently supports Latin characters using Helvetica, does not reflow surrounding paragraphs, and refuses changes that do not fit. Scanned text can be removed with area redaction and replaced using added text. This is not an OCR or word-processing tool.
 
 PDFs are sent to the editor server over HTTPS and held in process memory. Sessions expire after an hour of inactivity. Up to ten undo snapshots are available during a session; these are never included in downloads. Closing a document by opening a new one deletes its server session. PDF metadata is cleared on download. No global sanitization of attachments, comments, or content outside the selected redaction areas is promised.

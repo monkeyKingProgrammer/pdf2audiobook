@@ -22,6 +22,8 @@ first = source.new_page(width=500, height=700)
 first.insert_text((50, 70), 'CONFIDENTIAL SECRET', fontsize=16)
 first.insert_text((50, 120), 'Original sentence', fontsize=12)
 first.insert_text((50, 160), 'Keep this sentence', fontsize=12)
+first.insert_text((50, 190), 'Remove using empty replacement', fontsize=12)
+first.insert_text((50, 380), 'Remove using whitespace replacement', fontsize=12)
 pix = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 80, 60), False)
 pix.clear_with(120)
 first.insert_image(fitz.Rect(50, 210, 210, 330), pixmap=pix)
@@ -36,6 +38,8 @@ def edit(**operation):
 
 edit(action='redact', page=0, rect=[45, 45, 300, 80], fill='#151b19')
 edit(action='replace', page=0, rect=[45, 100, 300, 130], text='Revised sentence', size=12)
+edit(action='replace', page=0, rect=[45, 170, 350, 200], text='')
+edit(action='replace', page=0, rect=[45, 360, 350, 390], text='   \t\n ')
 edit(action='delete-image', page=0, rect=[50, 210, 210, 330])
 result = edit(action='delete-page', page=1)
 assert result['pages'] == 2
@@ -46,9 +50,12 @@ with fitz.open(stream=saved, filetype='pdf') as result:
     assert 'Original sentence' not in text
     assert 'Revised sentence' in text and 'Keep this sentence' in text
     assert 'Preserve overlapping text' in text
+    assert 'Remove using empty replacement' not in text
+    assert 'Remove using whitespace replacement' not in text
     assert 'DELETE THIS PAGE' not in text and len(result) == 2
     assert not result[0].get_image_info(), 'Removed image is still present'
     print('PASS: permanent text removal, text replacement, image removal, page deletion, fresh PDF export')
+    print('PASS: empty and whitespace-only replacements permanently remove the selected text')
 undo = json.loads(request(f'documents/{token}/undo', method='POST'))
 assert undo['pages'] == 3
 edit(action='rotate', page=0)
